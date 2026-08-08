@@ -214,7 +214,8 @@ async function autoLoadFromSheets() {
                 
                 const cWeek   = headers.findIndex(h => h.includes('Tuần'));
                 const cVung   = headers.findIndex(h => h.includes('TTBH') || h.includes('Vùng'));
-                const cLoai   = headers.findIndex(h => h.includes('Loại') || h.includes('Hình thức'));
+                const cLoai   = headers.findIndex(h => h.includes('Loại BH'));
+                if (cLoai === -1) cLoai = headers.findIndex(h => h === 'Loại BH');
                 const cBrand  = headers.findIndex(h => h.includes('Nhãn') || h.includes('Brand'));
                 const cNhom   = headers.findIndex(h => h.includes('Nhóm'));
 
