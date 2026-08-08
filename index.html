@@ -174,7 +174,9 @@ async function autoLoadFromSheets() {
                 const cNganh= headers.findIndex(h => h.includes('Tên Ngành'));
                 if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành') && !h.includes('Mã'));
                 if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành'));
-                const cHang = headers.findIndex(h => h.includes('Nhãn'));
+                const cHang = headers.findIndex(h => h.includes('Tên Nhãn'));
+                if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn') && !h.includes('Mã'));
+                if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn'));
                 const cTime = headers.findIndex(h => h.includes('Thời gian Lưu') || h.includes('Tuổi Tồn') || h.includes('Thời Gian'));
 
                 for (let i = headerIdx + 1; i < lines.length; i++) {
