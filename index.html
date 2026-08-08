@@ -171,7 +171,9 @@ async function autoLoadFromSheets() {
                 // Tìm cột tương ứng
                 const cWeek = headers.findIndex(h => h.includes('Tuần'));
                 const cKho  = headers.findIndex(h => h.includes('Kho Tổng'));
-                const cNganh= headers.findIndex(h => h.includes('Ngành'));
+                const cNganh= headers.findIndex(h => h.includes('Tên Ngành'));
+                if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành') && !h.includes('Mã'));
+                if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành'));
                 const cHang = headers.findIndex(h => h.includes('Nhãn'));
                 const cTime = headers.findIndex(h => h.includes('Thời gian Lưu') || h.includes('Tuổi Tồn') || h.includes('Thời Gian'));
 
@@ -1232,7 +1234,10 @@ function ltHandleUpload(e) {
                         let rowStr = rows[i].map(c => String(c || '').toLowerCase().trim());
                         let idxWeek = rowStr.findIndex(c => c === 'tuần cập nhật lưu trú' || c === 'tuần');
                         let idxKho = rowStr.findIndex(c => c === 'tên kho tổng' || c === 'tên kho');
-                        let idxNganh = rowStr.findIndex(c => c === 'tên ngành' || c === 'ngành hàng');
+                        let idxNganh = rowStr.findIndex(c => c.includes('tên ngành') || c === 'ngành hàng');
+                            if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành') && c.includes('tên'));
+                            if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành') && !c.includes('mã'));
+                            if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c === 'ngành hàng');
                         let idxHang = rowStr.findIndex(c => c === 'tên nhãn' || c === 'hãng');
                         let idxTime = rowStr.findIndex(c => c === 'thời gian lưu trú' || c === 'thời gian lưu');
                         
