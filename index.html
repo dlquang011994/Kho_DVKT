@@ -105,7 +105,6 @@
         window.globalCharts[id] = new Chart(canvas, config);
     }
     window.SYS_COLORS = ['#8b5cf6', '#10b981', '#f97316', '#3b82f6', '#f43f5e', '#eab308', '#06b6d4', '#84cc16', '#d946ef', '#14b8a6', '#6366f1', '#ec4899'];
-    // FIX 1: window.CHART_COLORS - định nghĩa để tránh lỗi "Cannot read properties of undefined (reading 'length')"
     window.CHART_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f97316', '#f43f5e', '#3b82f6', '#eab308', '#06b6d4', '#84cc16', '#d946ef', '#14b8a6', '#8b5cf6'];
     
     
@@ -113,9 +112,12 @@
 // GOOGLE SHEETS CONFIGURATION - Tự động load data
 // ==============================================================
 const GOOGLE_SHEETS_CONFIG = {
-    tonkho: 'https://docs.google.com/spreadsheets/d/1FV83zHl09SE14C-nlQQrXMKsLUEadL1o1aYHer_sJ2M/export?format=csv&gid=827494084',
-    luutru: 'https://docs.google.com/spreadsheets/d/1FV83zHl09SE14C-nlQQrXMKsLUEadL1o1aYHer_sJ2M/export?format=csv&gid=0',
-    phieu:  'https://docs.google.com/spreadsheets/d/1FV83zHl09SE14C-nlQQrXMKsLUEadL1o1aYHer_sJ2M/export?format=csv&gid=65251312'
+    // Tồn kho
+    tonkho: 'https://docs.google.com/spreadsheets/d/1Bz-9HW_eBrYr_2UAfOITjp62mkT9y2w2goihQ5i0tEg/export?format=csv&gid=0',
+    // Lưu trú
+    luutru: 'https://docs.google.com/spreadsheets/d/1So2UvTEJ-7RIKqHMXoqxTpCuxGdS-Zwc/export?format=csv&gid=0',
+    // Phiếu
+    phieu:  'https://docs.google.com/spreadsheets/d/1mSwmUnaZLN6YpzyZ9UWH5hfW9NfsESe7Lvr6hc0R-3Y/export?format=csv&gid=0'
 };
 
 // Tự động fetch data từ Google Sheets khi trang load xong
@@ -133,10 +135,13 @@ async function autoLoadFromSheets() {
     setStatus(statusPH, '⏳ Đang tải Phiếu...', '');
 
     let tkOk = false, ltOk = false, phOk = false;
+    
+    const cacheBust = '&_t=' + Date.now();
+    const fetchOpts = { cache: 'no-store' };
 
     // --- Sheet 1: Tồn Kho ---
     try {
-        const res = await fetch(GOOGLE_SHEETS_CONFIG.tonkho);
+        const res = await fetch(GOOGLE_SHEETS_CONFIG.tonkho + cacheBust, fetchOpts);
         if (res.ok) {
             const text = await res.text();
             const rows = tkParseCSV(text).filter(r => r['Tuần tồn kho']);
@@ -147,18 +152,19 @@ async function autoLoadFromSheets() {
                 tkOk = true;
             }
         }
-    } catch(e) { console.warn('Tồn Kho load failed:', e); }
+    } catch(e) { 
+        console.warn('Tồn Kho load failed:', e); 
+        initTonKho(); 
+    }
 
     // --- Sheet 2: Lưu Trú ---
     try {
-        const res = await fetch(GOOGLE_SHEETS_CONFIG.luutru);
+        const res = await fetch(GOOGLE_SHEETS_CONFIG.luutru + cacheBust, fetchOpts);
         if (res.ok) {
             const text = await res.text();
-            // Parse CSV cho Lưu Trú - header ở row 0
             const rows = [];
             const lines = text.split(/\r?\n/);
             if (lines.length > 1) {
-                // Tìm dòng header (có chữ "Tuần cập nhật")
                 let headerIdx = -1;
                 for (let i = 0; i < Math.min(5, lines.length); i++) {
                     if (lines[i].includes('Tuần cập nhật') || lines[i].includes('Tuần')) {
@@ -168,16 +174,15 @@ async function autoLoadFromSheets() {
                 if (headerIdx === -1) headerIdx = 0;
                 const headers = parseCSVLine(lines[headerIdx]);
                 
-                // Tìm cột tương ứng
                 const cWeek = headers.findIndex(h => h.includes('Tuần'));
-                const cKho  = headers.findIndex(h => h.includes('Kho Tổng'));
-                const cNganh= headers.findIndex(h => h.includes('Tên Ngành'));
+                let cKho  = headers.findIndex(h => h.includes('Kho Tổng'));
+                let cNganh= headers.findIndex(h => h.includes('Tên Ngành'));
                 if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành') && !h.includes('Mã'));
                 if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành'));
-                const cHang = headers.findIndex(h => h.includes('Tên Nhãn'));
+                let cHang = headers.findIndex(h => h.includes('Tên Nhãn'));
                 if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn') && !h.includes('Mã'));
                 if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn'));
-                const cTime = headers.findIndex(h => h.includes('Thời gian Lưu') || h.includes('Tuổi Tồn') || h.includes('Thời Gian'));
+                let cTime = headers.findIndex(h => h.includes('Thời gian Lưu') || h.includes('Tuổi Tồn') || h.includes('Thời Gian'));
 
                 for (let i = headerIdx + 1; i < lines.length; i++) {
                     const vals = parseCSVLine(lines[i]);
@@ -199,11 +204,14 @@ async function autoLoadFromSheets() {
                 ltOk = true;
             }
         }
-    } catch(e) { console.warn('Lưu Trú load failed:', e); }
+    } catch(e) { 
+        console.warn('Lưu Trú load failed:', e); 
+        initLuuTru(); 
+    }
 
     // --- Sheet 3: Theo dõi Phiếu ---
     try {
-        const res = await fetch(GOOGLE_SHEETS_CONFIG.phieu);
+        const res = await fetch(GOOGLE_SHEETS_CONFIG.phieu + cacheBust, fetchOpts);
         if (res.ok) {
             const text = await res.text();
             const lines = text.split(/\r?\n/);
@@ -217,11 +225,11 @@ async function autoLoadFromSheets() {
                 const headers = parseCSVLine(lines[headerIdx]);
                 
                 const cWeek   = headers.findIndex(h => h.includes('Tuần'));
-                const cVung   = headers.findIndex(h => h.includes('TTBH') || h.includes('Vùng'));
-                const cLoai   = headers.findIndex(h => h.includes('Loại BH'));
+                let cVung   = headers.findIndex(h => h.includes('TTBH') || h.includes('Vùng'));
+                let cLoai   = headers.findIndex(h => h.includes('Loại BH'));
                 if (cLoai === -1) cLoai = headers.findIndex(h => h === 'Loại BH');
-                const cBrand  = headers.findIndex(h => h.includes('Nhãn') || h.includes('Brand'));
-                const cNhom   = headers.findIndex(h => h.includes('Nhóm'));
+                let cBrand  = headers.findIndex(h => h.includes('Nhãn') || h.includes('Brand'));
+                let cNhom   = headers.findIndex(h => h.includes('Nhóm'));
 
                 let aggMap = {};
                 for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -268,25 +276,28 @@ async function autoLoadFromSheets() {
                 }
             }
         }
-    } catch(e) { console.warn('Phiếu load failed:', e); }
+    } catch(e) { 
+        console.warn('Phiếu load failed:', e); 
+        initPhieu(); 
+    }
 
     // --- Cập nhật trạng thái ---
     if (tkOk) {
         setStatus(statusTK, '✅ Tải từ Google Sheets OK (' + tkData.length + ' dòng)', 'success');
-    } else {
+    } else if (!tkData || tkData.length === 0) {
         setStatus(statusTK, '⚠️ Google Sheets chưa có dữ liệu - Dùng nút Upload bên dưới', 'error');
     }
 
     if (ltOk) {
         setStatus(statusLT, '✅ Tải từ Google Sheets OK (' + ltData.length + ' dòng)', 'success');
-    } else {
+    } else if (!ltData || ltData.length === 0) {
         setStatus(statusLT, '⚠️ Google Sheets chưa có dữ liệu - Dùng nút Upload bên dưới', 'error');
     }
 
     if (phOk) {
         const total = phData.reduce((s, d) => s + d.sl, 0);
         setStatus(statusPH, '✅ Tải từ Google Sheets OK (' + total.toLocaleString('vi-VN') + ' phiếu)', 'success');
-    } else {
+    } else if (!phData || phData.length === 0) {
         setStatus(statusPH, '⚠️ Google Sheets chưa có dữ liệu - Dùng nút Upload bên dưới', 'error');
     }
 
@@ -343,6 +354,7 @@ window.makeMultiSelect = function(containerId, label, items, selectedSet, onChan
 
         const panel = document.createElement('div'); 
         panel.className = 'ms-panel'; panel.hidden = true;
+        container.appendChild(container);
         container.appendChild(panel);
 
         const search = document.createElement('input'); 
@@ -1064,7 +1076,7 @@ function tkResetFilters() {
 
 function tkRenderData() {
   if (tkData.length === 0) {
-    document.getElementById('tkKpiCum1').innerHTML = ''; document.getElementById('tkKpiCum2').innerHTML = '';
+    document.getElementById('tkKpiCum1').innerHTML = ''; 
     ['tkWeekCompareTable','tkShopWeeklyTable','tkCatWeeklyTable','tkWarehouseWeeklyTable'].forEach(id => { const e = document.getElementById(id); if(e) e.innerHTML = '';});
     return;
   }
