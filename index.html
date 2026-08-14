@@ -112,13 +112,11 @@
 // GOOGLE SHEETS CONFIGURATION - Tự động load data
 // ==============================================================
 const GOOGLE_SHEETS_CONFIG = {
-    // Tồn kho (Đã cập nhật link dạng output=csv)
+    // Đã thay thế link Tồn kho CSV
     tonkho: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRjb6KfY6r6KspMv3-rdBHvFN4Cz1VJstrbTIBkGE9XUvrUIP8-dYSSjDTD0CwQzGgANQN4KrfIJCZD/pub?output=csv',
-    
-    // Lưu trú (Đã cập nhật link dạng output=csv)
+    // Đã thay thế link Lưu trú CSV
     luutru: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRFcacixll69SOqVNosLveQ_yev3LbjLciWoBD8BhF7eiz-l39eSGHhEXBPQ9s5yg/pub?output=csv',
-    
-    // Phiếu
+    // Link Phiếu
     phieu:  'https://docs.google.com/spreadsheets/d/1mSwmUnaZLN6YpzyZ9UWH5hfW9NfsESe7Lvr6hc0R-3Y/export?format=csv&gid=0'
 };
 
@@ -149,13 +147,12 @@ async function autoLoadFromSheets() {
                 let parsed = tkParseCSV(text);
                 if (parsed.length > 0) {
                     const keys = Object.keys(parsed[0]);
-                    // Hỗ trợ cả tên cột là Tuần hoặc Week
                     const weekKey = keys.find(k => k.toLowerCase().includes('tuần') || k.toLowerCase().includes('week')) || 'Tuần tồn kho';
                     
                     const rows = parsed.filter(r => {
                         let val = r[weekKey];
                         if(!val) return false;
-                        let vLower = val.toLowerCase();
+                        let vLower = String(val).toLowerCase();
                         return !['tuần', 'week', 'total'].includes(vLower) && !vLower.includes('cập nhật');
                     });
                     
@@ -292,18 +289,18 @@ async function autoLoadFromSheets() {
         }
     } catch(e) { console.warn('Phiếu fetch failed:', e); }
 
-    // --- Cập nhật trạng thái và gọi Fallback (Cache) nếu lỗi mạng ---
+    // --- Cập nhật trạng thái ---
     if (tkOk) {
         setStatus(statusTK, '✅ Tải từ Google Sheets OK (' + tkData.length + ' dòng)', 'success');
     } else {
-        setStatus(statusTK, '⚠️ Lỗi cấu trúc/Phân quyền Google Sheets (Hiển thị Cache cũ)', 'error');
-        initTonKho(); 
+        setStatus(statusTK, '⚠️ Lỗi tải Sheet Tồn Kho (Dùng data cũ/Trống)', 'error');
+        initTonKho();
     }
 
     if (ltOk) {
         setStatus(statusLT, '✅ Tải từ Google Sheets OK (' + ltData.length + ' dòng)', 'success');
     } else {
-        setStatus(statusLT, '⚠️ Lỗi cấu trúc/Phân quyền Google Sheets (Hiển thị Cache cũ)', 'error');
+        setStatus(statusLT, '⚠️ Lỗi tải Sheet Lưu Trú (Dùng data cũ/Trống)', 'error');
         initLuuTru();
     }
 
@@ -311,7 +308,7 @@ async function autoLoadFromSheets() {
         const total = phData.reduce((s, d) => s + d.sl, 0);
         setStatus(statusPH, '✅ Tải từ Google Sheets OK (' + total.toLocaleString('vi-VN') + ' phiếu)', 'success');
     } else {
-        setStatus(statusPH, '⚠️ Lỗi cấu trúc/Phân quyền Google Sheets (Hiển thị Cache cũ)', 'error');
+        setStatus(statusPH, '⚠️ Lỗi tải Sheet Phiếu (Dùng data cũ/Trống)', 'error');
         initPhieu();
     }
 
@@ -353,7 +350,6 @@ window.addEventListener('DOMContentLoaded', () => {
     autoLoadFromSheets();
 });
 
-
 window.makeMultiSelect = function(containerId, label, items, selectedSet, onChangeCallback) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -368,7 +364,7 @@ window.makeMultiSelect = function(containerId, label, items, selectedSet, onChan
 
         const panel = document.createElement('div'); 
         panel.className = 'ms-panel'; panel.hidden = true;
-        // Đã xoá dòng lỗi container.appendChild(container)
+        // Đã gỡ bỏ dòng code gây sập trắng trang: container.appendChild(container);
         container.appendChild(panel);
 
         const search = document.createElement('input'); 
