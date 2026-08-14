@@ -112,10 +112,12 @@
 // GOOGLE SHEETS CONFIGURATION - Tự động load data
 // ==============================================================
 const GOOGLE_SHEETS_CONFIG = {
-    // Tồn kho
-    tonkho: 'https://docs.google.com/spreadsheets/d/1Bz-9HW_eBrYr_2UAfOITjp62mkT9y2w2goihQ5i0tEg/export?format=csv&gid=0',
-    // Lưu trú
-    luutru: 'https://docs.google.com/spreadsheets/d/1So2UvTEJ-7RIKqHMXoqxTpCuxGdS-Zwc/export?format=csv&gid=0',
+    // Tồn kho (Đã cập nhật link dạng output=csv)
+    tonkho: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRjb6KfY6r6KspMv3-rdBHvFN4Cz1VJstrbTIBkGE9XUvrUIP8-dYSSjDTD0CwQzGgANQN4KrfIJCZD/pub?output=csv',
+    
+    // Lưu trú (Đã cập nhật link dạng output=csv)
+    luutru: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRFcacixll69SOqVNosLveQ_yev3LbjLciWoBD8BhF7eiz-l39eSGHhEXBPQ9s5yg/pub?output=csv',
+    
     // Phiếu
     phieu:  'https://docs.google.com/spreadsheets/d/1mSwmUnaZLN6YpzyZ9UWH5hfW9NfsESe7Lvr6hc0R-3Y/export?format=csv&gid=0'
 };
@@ -135,7 +137,6 @@ async function autoLoadFromSheets() {
     setStatus(statusPH, '⏳ Đang tải Phiếu...', '');
 
     let tkOk = false, ltOk = false, phOk = false;
-    
     const cacheBust = '&_t=' + Date.now();
     const fetchOpts = { cache: 'no-store' };
 
@@ -144,167 +145,180 @@ async function autoLoadFromSheets() {
         const res = await fetch(GOOGLE_SHEETS_CONFIG.tonkho + cacheBust, fetchOpts);
         if (res.ok) {
             const text = await res.text();
-            const rows = tkParseCSV(text).filter(r => r['Tuần tồn kho']);
-            if (rows.length > 0) {
-                tkData = rows;
-                tkApplyNameMap();
-                localStorage.setItem(TK_STORAGE_KEY, JSON.stringify(tkData));
-                tkOk = true;
+            if(!text.trim().startsWith('<!DOCTYPE html')) {
+                let parsed = tkParseCSV(text);
+                if (parsed.length > 0) {
+                    const keys = Object.keys(parsed[0]);
+                    // Hỗ trợ cả tên cột là Tuần hoặc Week
+                    const weekKey = keys.find(k => k.toLowerCase().includes('tuần') || k.toLowerCase().includes('week')) || 'Tuần tồn kho';
+                    
+                    const rows = parsed.filter(r => {
+                        let val = r[weekKey];
+                        if(!val) return false;
+                        let vLower = val.toLowerCase();
+                        return !['tuần', 'week', 'total'].includes(vLower) && !vLower.includes('cập nhật');
+                    });
+                    
+                    if (rows.length > 0) {
+                        rows.forEach(r => { if(weekKey !== 'Tuần tồn kho') r['Tuần tồn kho'] = r[weekKey]; });
+                        tkData = rows;
+                        tkApplyNameMap();
+                        localStorage.setItem(TK_STORAGE_KEY, JSON.stringify(tkData));
+                        tkOk = true;
+                    }
+                }
             }
         }
-    } catch(e) { 
-        console.warn('Tồn Kho load failed:', e); 
-        initTonKho(); 
-    }
+    } catch(e) { console.warn('Tồn Kho fetch failed:', e); }
 
     // --- Sheet 2: Lưu Trú ---
     try {
         const res = await fetch(GOOGLE_SHEETS_CONFIG.luutru + cacheBust, fetchOpts);
         if (res.ok) {
             const text = await res.text();
-            const rows = [];
-            const lines = text.split(/\r?\n/);
-            if (lines.length > 1) {
-                let headerIdx = -1;
-                for (let i = 0; i < Math.min(5, lines.length); i++) {
-                    if (lines[i].includes('Tuần cập nhật') || lines[i].includes('Tuần')) {
-                        headerIdx = i; break;
+            if(!text.trim().startsWith('<!DOCTYPE html')) {
+                const rows = [];
+                const lines = text.split(/\r?\n/);
+                if (lines.length > 1) {
+                    let headerIdx = -1;
+                    for (let i = 0; i < Math.min(10, lines.length); i++) {
+                        let lLower = lines[i].toLowerCase();
+                        if (lLower.includes('tuần') || lLower.includes('week')) { headerIdx = i; break; }
+                    }
+                    if (headerIdx === -1) headerIdx = 0;
+                    const headers = parseCSVLine(lines[headerIdx]);
+                    
+                    const cWeek = headers.findIndex(h => h.toLowerCase().includes('tuần') || h.toLowerCase().includes('week'));
+                    let cKho  = headers.findIndex(h => h.includes('Kho Tổng') || h.includes('Tên Kho'));
+                    let cNganh= headers.findIndex(h => h.includes('Ngành'));
+                    let cHang = headers.findIndex(h => h.includes('Nhãn') || h.includes('Hãng'));
+                    let cTime = headers.findIndex(h => h.includes('Thời gian') || h.includes('Tuổi Tồn'));
+
+                    for (let i = headerIdx + 1; i < lines.length; i++) {
+                        const vals = parseCSVLine(lines[i]);
+                        if (!vals || vals.length === 0) continue;
+                        const w = cWeek >= 0 ? String(vals[cWeek] || '').trim() : '';
+                        
+                        let wLower = w.toLowerCase();
+                        if (!w || wLower.includes('tuần cập nhật') || wLower === 'tuần' || wLower === 'week' || w === 'Total') continue;
+                        
+                        rows.push({
+                            week:  w,
+                            kho:   cKho  >= 0 && vals[cKho]  ? String(vals[cKho]).trim()  : 'Khác',
+                            nganh: cNganh>= 0 && vals[cNganh]? String(vals[cNganh]).trim(): 'Khác',
+                            hang:  cHang >= 0 && vals[cHang] ? String(vals[cHang]).trim() : 'Khác',
+                            time:  cTime >= 0 ? window.safeParseFloat(vals[cTime]) : 0
+                        });
                     }
                 }
-                if (headerIdx === -1) headerIdx = 0;
-                const headers = parseCSVLine(lines[headerIdx]);
-                
-                const cWeek = headers.findIndex(h => h.includes('Tuần'));
-                let cKho  = headers.findIndex(h => h.includes('Kho Tổng'));
-                let cNganh= headers.findIndex(h => h.includes('Tên Ngành'));
-                if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành') && !h.includes('Mã'));
-                if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành'));
-                let cHang = headers.findIndex(h => h.includes('Tên Nhãn'));
-                if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn') && !h.includes('Mã'));
-                if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn'));
-                let cTime = headers.findIndex(h => h.includes('Thời gian Lưu') || h.includes('Tuổi Tồn') || h.includes('Thời Gian'));
-
-                for (let i = headerIdx + 1; i < lines.length; i++) {
-                    const vals = parseCSVLine(lines[i]);
-                    if (!vals || vals.length === 0) continue;
-                    const w = cWeek >= 0 ? String(vals[cWeek] || '').trim() : '';
-                    if (!w || w.toLowerCase().includes('tuần') || w === 'Total') continue;
-                    rows.push({
-                        week:  w,
-                        kho:   cKho  >= 0 && vals[cKho]  ? String(vals[cKho]).trim()  : 'Khác',
-                        nganh: cNganh>= 0 && vals[cNganh]? String(vals[cNganh]).trim(): 'Khác',
-                        hang:  cHang >= 0 && vals[cHang] ? String(vals[cHang]).trim() : 'Khác',
-                        time:  cTime >= 0 ? window.safeParseFloat(vals[cTime]) : 0
-                    });
+                if (rows.length > 0) {
+                    ltData = rows;
+                    localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(ltData));
+                    ltOk = true;
                 }
             }
-            if (rows.length > 0) {
-                ltData = rows;
-                localStorage.setItem(LT_STORAGE_KEY, JSON.stringify(ltData));
-                ltOk = true;
-            }
         }
-    } catch(e) { 
-        console.warn('Lưu Trú load failed:', e); 
-        initLuuTru(); 
-    }
+    } catch(e) { console.warn('Lưu Trú fetch failed:', e); }
 
     // --- Sheet 3: Theo dõi Phiếu ---
     try {
         const res = await fetch(GOOGLE_SHEETS_CONFIG.phieu + cacheBust, fetchOpts);
         if (res.ok) {
             const text = await res.text();
-            const lines = text.split(/\r?\n/);
-            if (lines.length > 1) {
-                let headerIdx = 0;
-                for (let i = 0; i < Math.min(5, lines.length); i++) {
-                    if (lines[i].includes('Tuần') && (lines[i].includes('TTBH') || lines[i].includes('phiếu'))) {
-                        headerIdx = i; break;
+            if(!text.trim().startsWith('<!DOCTYPE html')) {
+                const lines = text.split(/\r?\n/);
+                if (lines.length > 1) {
+                    let headerIdx = 0;
+                    for (let i = 0; i < Math.min(10, lines.length); i++) {
+                        let lLower = lines[i].toLowerCase();
+                        if ((lLower.includes('tuần') || lLower.includes('week')) && (lines[i].includes('TTBH') || lines[i].includes('phiếu') || lines[i].includes('Loại'))) {
+                            headerIdx = i; break;
+                        }
                     }
-                }
-                const headers = parseCSVLine(lines[headerIdx]);
-                
-                const cWeek   = headers.findIndex(h => h.includes('Tuần'));
-                let cVung   = headers.findIndex(h => h.includes('TTBH') || h.includes('Vùng'));
-                let cLoai   = headers.findIndex(h => h.includes('Loại BH'));
-                if (cLoai === -1) cLoai = headers.findIndex(h => h === 'Loại BH');
-                let cBrand  = headers.findIndex(h => h.includes('Nhãn') || h.includes('Brand'));
-                let cNhom   = headers.findIndex(h => h.includes('Nhóm'));
-
-                let aggMap = {};
-                for (let i = headerIdx + 1; i < lines.length; i++) {
-                    const vals = parseCSVLine(lines[i]);
-                    if (!vals || vals.length === 0) continue;
-                    const w = cWeek >= 0 ? String(vals[cWeek] || '').trim() : '';
-                    if (!w || w.toLowerCase().includes('tuần') || w === 'Total') continue;
+                    const headers = parseCSVLine(lines[headerIdx]);
                     
-                    let nhom = cNhom >= 0 ? String(vals[cNhom] || '').trim() : '';
-                    if (!nhom) {
-                        const loaiLower = (cLoai >= 0 ? String(vals[cLoai] || '') : '').toLowerCase();
-                        if (loaiLower.includes('bảo hành') || loaiLower.includes('bh')) nhom = 'Bảo hành';
-                        else if (loaiLower.includes('dịch vụ') || loaiLower.includes('dv')) nhom = 'Dịch vụ';
-                        else if (loaiLower.includes('thẩm định')) nhom = 'Thẩm định lỗi';
-                        else nhom = 'Khác';
+                    const cWeek   = headers.findIndex(h => h.toLowerCase().includes('tuần') || h.toLowerCase().includes('week'));
+                    let cVung   = headers.findIndex(h => h.includes('TTBH') || h.includes('Vùng') || h.includes('Miền'));
+                    let cLoai   = headers.findIndex(h => h.includes('Loại BH') || h.includes('Loại hình thức') || h.includes('Loại'));
+                    let cBrand  = headers.findIndex(h => h.includes('Nhãn') || h.includes('Brand'));
+                    let cNhom   = headers.findIndex(h => h.includes('Nhóm') || h.includes('Hình thức'));
+
+                    let aggMap = {};
+                    for (let i = headerIdx + 1; i < lines.length; i++) {
+                        const vals = parseCSVLine(lines[i]);
+                        if (!vals || vals.length === 0) continue;
+                        const w = cWeek >= 0 ? String(vals[cWeek] || '').trim() : '';
+                        
+                        let wLower = w.toLowerCase();
+                        if (!w || wLower.includes('phát sinh') || wLower === 'tuần' || wLower === 'week' || w === 'Total') continue;
+                        
+                        let nhom = cNhom >= 0 ? String(vals[cNhom] || '').trim() : '';
+                        if (!nhom) {
+                            const loaiLower = (cLoai >= 0 ? String(vals[cLoai] || '') : '').toLowerCase();
+                            if (loaiLower.includes('bảo hành') || loaiLower.includes('bh')) nhom = 'Bảo hành';
+                            else if (loaiLower.includes('dịch vụ') || loaiLower.includes('dv')) nhom = 'Dịch vụ';
+                            else if (loaiLower.includes('thẩm định')) nhom = 'Thẩm định lỗi';
+                            else nhom = 'Khác';
+                        }
+
+                        const vung  = cVung  >= 0 && vals[cVung]  ? String(vals[cVung]).trim()  : 'Khác';
+                        const loai  = cLoai  >= 0 && vals[cLoai]  ? String(vals[cLoai]).trim()  : 'Khác';
+                        const brand = cBrand >= 0 && vals[cBrand] ? String(vals[cBrand]).trim() : 'Khác';
+
+                        const key = w + '|' + vung + '|' + nhom + '|' + loai + '|' + brand;
+                        if (!aggMap[key]) {
+                            aggMap[key] = { week: w, vung: vung, nhom: nhom, loai: loai, brand: brand, sl: 0 };
+                        }
+                        aggMap[key].sl += 1;
                     }
 
-                    const vung  = cVung  >= 0 && vals[cVung]  ? String(vals[cVung]).trim()  : 'Khác';
-                    const loai  = cLoai  >= 0 && vals[cLoai]  ? String(vals[cLoai]).trim()  : 'Khác';
-                    const brand = cBrand >= 0 && vals[cBrand] ? String(vals[cBrand]).trim() : 'Khác';
-
-                    const key = w + '|' + vung + '|' + nhom + '|' + loai + '|' + brand;
-                    if (!aggMap[key]) {
-                        aggMap[key] = { week: w, vung: vung, nhom: nhom, loai: loai, brand: brand, sl: 0 };
+                    let finalAgg = {};
+                    Object.values(aggMap).forEach(d => {
+                        const key = d.week + '|' + d.vung + '|' + d.nhom + '|' + d.loai + '|' + d.brand;
+                        if (!finalAgg[key]) finalAgg[key] = { week: d.week, vung: d.vung, nhom: d.nhom, loai: d.loai, brand: d.brand, sl: 0 };
+                        finalAgg[key].sl += d.sl;
+                    });
+                    let rows = Object.values(finalAgg);
+                    if (rows.length > 0) {
+                        phData = rows;
+                        try {
+                            const dataToSave = JSON.stringify(phData);
+                            if (dataToSave.length < 4 * 1024 * 1024) localStorage.setItem(PH_STORAGE_KEY, dataToSave);
+                        } catch(e) {}
+                        phOk = true;
                     }
-                    aggMap[key].sl += 1;
-                }
-
-                let newRows = Object.values(aggMap);
-                let finalAgg = {};
-                newRows.forEach(d => {
-                    const key = d.week + '|' + d.vung + '|' + d.nhom + '|' + d.loai + '|' + d.brand;
-                    if (!finalAgg[key]) finalAgg[key] = { week: d.week, vung: d.vung, nhom: d.nhom, loai: d.loai, brand: d.brand, sl: 0 };
-                    finalAgg[key].sl += d.sl;
-                });
-                let rows = Object.values(finalAgg);
-                if (rows.length > 0) {
-                    phData = rows;
-                    try {
-                        const dataToSave = JSON.stringify(phData);
-                        if (dataToSave.length < 4 * 1024 * 1024) localStorage.setItem(PH_STORAGE_KEY, dataToSave);
-                    } catch(e) {}
-                    phOk = true;
                 }
             }
         }
-    } catch(e) { 
-        console.warn('Phiếu load failed:', e); 
-        initPhieu(); 
-    }
+    } catch(e) { console.warn('Phiếu fetch failed:', e); }
 
-    // --- Cập nhật trạng thái ---
+    // --- Cập nhật trạng thái và gọi Fallback (Cache) nếu lỗi mạng ---
     if (tkOk) {
         setStatus(statusTK, '✅ Tải từ Google Sheets OK (' + tkData.length + ' dòng)', 'success');
-    } else if (!tkData || tkData.length === 0) {
-        setStatus(statusTK, '⚠️ Google Sheets chưa có dữ liệu - Dùng nút Upload bên dưới', 'error');
+    } else {
+        setStatus(statusTK, '⚠️ Lỗi cấu trúc/Phân quyền Google Sheets (Hiển thị Cache cũ)', 'error');
+        initTonKho(); 
     }
 
     if (ltOk) {
         setStatus(statusLT, '✅ Tải từ Google Sheets OK (' + ltData.length + ' dòng)', 'success');
-    } else if (!ltData || ltData.length === 0) {
-        setStatus(statusLT, '⚠️ Google Sheets chưa có dữ liệu - Dùng nút Upload bên dưới', 'error');
+    } else {
+        setStatus(statusLT, '⚠️ Lỗi cấu trúc/Phân quyền Google Sheets (Hiển thị Cache cũ)', 'error');
+        initLuuTru();
     }
 
     if (phOk) {
         const total = phData.reduce((s, d) => s + d.sl, 0);
         setStatus(statusPH, '✅ Tải từ Google Sheets OK (' + total.toLocaleString('vi-VN') + ' phiếu)', 'success');
-    } else if (!phData || phData.length === 0) {
-        setStatus(statusPH, '⚠️ Google Sheets chưa có dữ liệu - Dùng nút Upload bên dưới', 'error');
+    } else {
+        setStatus(statusPH, '⚠️ Lỗi cấu trúc/Phân quyền Google Sheets (Hiển thị Cache cũ)', 'error');
+        initPhieu();
     }
 
-    // Render lại dashboard sau khi load xong
-    if (tkOk) tkRefreshAll();
-    if (ltOk) { ltPopulateFilters(); ltApplyFilters(); }
-    if (phOk) { phPopulateFilters(); phApplyFilters(); }
+    // Render Data
+    if (tkData && tkData.length > 0) tkRefreshAll();
+    if (ltData && ltData.length > 0) { ltPopulateFilters(); ltApplyFilters(); }
+    if (phData && phData.length > 0) { phPopulateFilters(); phApplyFilters(); }
 }
 
 // Helper: parse 1 dòng CSV (giống logic hiện có)
@@ -354,7 +368,7 @@ window.makeMultiSelect = function(containerId, label, items, selectedSet, onChan
 
         const panel = document.createElement('div'); 
         panel.className = 'ms-panel'; panel.hidden = true;
-        container.appendChild(container);
+        // Đã xoá dòng lỗi container.appendChild(container)
         container.appendChild(panel);
 
         const search = document.createElement('input'); 
@@ -825,10 +839,7 @@ function tkGetLast4Data() {
 }
 
 function tkParseCSV(text) {
-  // FIX 8: Strip BOM (﻿) nếu có - Excel VN thường save CSV với UTF-8 BOM
   if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
-  // FIX 7: Auto-detect delimiter - hỗ trợ cả `,` (chuẩn) và `;` (Excel VN)
-  // Đếm tần suất `,` và `;` trên dòng đầu tiên (header), lấy cái nào nhiều hơn
   let firstNewline = text.indexOf('\n');
   if (firstNewline === -1) firstNewline = text.length;
   const headerLine = text.substring(0, firstNewline);
