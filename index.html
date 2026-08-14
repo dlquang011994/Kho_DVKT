@@ -186,8 +186,17 @@ async function autoLoadFromSheets() {
                     const headers = parseCSVLine(lines[headerIdx]);
                     
                     const cWeek = headers.findIndex(h => h.toLowerCase().includes('tuần') || h.toLowerCase().includes('week'));
-                    let cKho  = headers.findIndex(h => h.includes('Kho Tổng') || h.includes('Tên Kho'));
-                    let cNganh= headers.findIndex(h => h.includes('Ngành'));
+                    
+                    // FIX: Ưu tiên tìm Tên Kho và tuyệt đối né cột chứa chữ "mã"
+                    let cKho = headers.findIndex(h => h.toLowerCase().includes('tên kho') && !h.toLowerCase().includes('mã'));
+                    if (cKho === -1) cKho = headers.findIndex(h => h.toLowerCase().includes('kho tổng') && !h.toLowerCase().includes('mã'));
+                    if (cKho === -1) cKho = headers.findIndex(h => h.includes('Kho Tổng') || h.includes('Tên Kho'));
+
+                    // FIX: Ưu tiên tìm Tên Ngành và tuyệt đối né cột chứa chữ "mã"
+                    let cNganh = headers.findIndex(h => h.toLowerCase().includes('tên ngành') && !h.toLowerCase().includes('mã'));
+                    if (cNganh === -1) cNganh = headers.findIndex(h => h.toLowerCase().includes('ngành') && !h.toLowerCase().includes('mã'));
+                    if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành'));
+
                     let cHang = headers.findIndex(h => h.includes('Nhãn') || h.includes('Hãng'));
                     let cTime = headers.findIndex(h => h.includes('Thời gian') || h.includes('Tuổi Tồn'));
 
@@ -364,7 +373,6 @@ window.makeMultiSelect = function(containerId, label, items, selectedSet, onChan
 
         const panel = document.createElement('div'); 
         panel.className = 'ms-panel'; panel.hidden = true;
-        // Đã gỡ bỏ dòng code gây sập trắng trang: container.appendChild(container);
         container.appendChild(panel);
 
         const search = document.createElement('input'); 
@@ -1254,17 +1262,20 @@ function ltHandleUpload(e) {
                     for (let i = 0; i < Math.min(30, rows.length); i++) {
                         let rowStr = rows[i].map(c => String(c || '').toLowerCase().trim());
                         let idxWeek = rowStr.findIndex(c => c === 'tuần cập nhật lưu trú' || c === 'tuần');
-                        let idxKho = rowStr.findIndex(c => c === 'tên kho tổng' || c === 'tên kho');
-                        let idxNganh = rowStr.findIndex(c => c.includes('tên ngành') || c === 'ngành hàng');
-                            if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành') && c.includes('tên'));
-                            if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành') && !c.includes('mã'));
-                            if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c === 'ngành hàng');
+                        
+                        // FIX TẠI ĐÂY (Hàm Upload): Ép thuật toán tìm đúng cột "Tên", tuyệt đối né cột chứa chữ "Mã"
+                        let idxKho = rowStr.findIndex(c => c.includes('tên kho') && !c.includes('mã'));
+                        if(idxKho === -1) idxKho = rowStr.findIndex(c => c.includes('kho tổng') && !c.includes('mã'));
+                        if(idxKho === -1) idxKho = rowStr.findIndex(c => c.includes('kho tổng') || c.includes('tên kho'));
+
+                        let idxNganh = rowStr.findIndex(c => c.includes('tên ngành') && !c.includes('mã'));
+                        if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành') && !c.includes('mã'));
+                        if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành'));
+
                         let idxHang = rowStr.findIndex(c => c === 'tên nhãn' || c === 'hãng');
                         let idxTime = rowStr.findIndex(c => c === 'thời gian lưu trú' || c === 'thời gian lưu');
                         
                         if(idxWeek === -1) idxWeek = rowStr.findIndex(c => c.includes('tuần'));
-                        if(idxKho === -1) idxKho = rowStr.findIndex(c => c.includes('kho tổng'));
-                        if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành'));
                         if(idxHang === -1) idxHang = rowStr.findIndex(c => c.includes('nhãn') || c.includes('hãng'));
                         if(idxTime === -1) idxTime = rowStr.findIndex(c => c.includes('thời gian') || c.includes('tuổi'));
 
