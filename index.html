@@ -112,11 +112,11 @@
 // GOOGLE SHEETS CONFIGURATION - Tự động load data
 // ==============================================================
 const GOOGLE_SHEETS_CONFIG = {
-    // Đã thay thế link Tồn kho CSV
+    // Tồn kho
     tonkho: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRjb6KfY6r6KspMv3-rdBHvFN4Cz1VJstrbTIBkGE9XUvrUIP8-dYSSjDTD0CwQzGgANQN4KrfIJCZD/pub?output=csv',
-    // Đã thay thế link Lưu trú CSV
+    // Lưu trú
     luutru: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRFcacixll69SOqVNosLveQ_yev3LbjLciWoBD8BhF7eiz-l39eSGHhEXBPQ9s5yg/pub?output=csv',
-    // Link Phiếu
+    // Phiếu
     phieu:  'https://docs.google.com/spreadsheets/d/1mSwmUnaZLN6YpzyZ9UWH5hfW9NfsESe7Lvr6hc0R-3Y/export?format=csv&gid=0'
 };
 
@@ -187,17 +187,19 @@ async function autoLoadFromSheets() {
                     
                     const cWeek = headers.findIndex(h => h.toLowerCase().includes('tuần') || h.toLowerCase().includes('week'));
                     
-                    // FIX: Ưu tiên tìm Tên Kho và tuyệt đối né cột chứa chữ "mã"
                     let cKho = headers.findIndex(h => h.toLowerCase().includes('tên kho') && !h.toLowerCase().includes('mã'));
                     if (cKho === -1) cKho = headers.findIndex(h => h.toLowerCase().includes('kho tổng') && !h.toLowerCase().includes('mã'));
                     if (cKho === -1) cKho = headers.findIndex(h => h.includes('Kho Tổng') || h.includes('Tên Kho'));
 
-                    // FIX: Ưu tiên tìm Tên Ngành và tuyệt đối né cột chứa chữ "mã"
                     let cNganh = headers.findIndex(h => h.toLowerCase().includes('tên ngành') && !h.toLowerCase().includes('mã'));
                     if (cNganh === -1) cNganh = headers.findIndex(h => h.toLowerCase().includes('ngành') && !h.toLowerCase().includes('mã'));
                     if (cNganh === -1) cNganh = headers.findIndex(h => h.includes('Ngành'));
 
-                    let cHang = headers.findIndex(h => h.includes('Nhãn') || h.includes('Hãng'));
+                    // FIX: Ưu tiên tìm Tên Hãng/Nhãn và tuyệt đối né cột chứa chữ "mã"
+                    let cHang = headers.findIndex(h => (h.toLowerCase().includes('tên nhãn') || h.toLowerCase().includes('tên hãng')) && !h.toLowerCase().includes('mã'));
+                    if (cHang === -1) cHang = headers.findIndex(h => (h.toLowerCase().includes('nhãn') || h.toLowerCase().includes('hãng')) && !h.toLowerCase().includes('mã'));
+                    if (cHang === -1) cHang = headers.findIndex(h => h.includes('Nhãn') || h.includes('Hãng'));
+
                     let cTime = headers.findIndex(h => h.includes('Thời gian') || h.includes('Tuổi Tồn'));
 
                     for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -1263,7 +1265,6 @@ function ltHandleUpload(e) {
                         let rowStr = rows[i].map(c => String(c || '').toLowerCase().trim());
                         let idxWeek = rowStr.findIndex(c => c === 'tuần cập nhật lưu trú' || c === 'tuần');
                         
-                        // FIX TẠI ĐÂY (Hàm Upload): Ép thuật toán tìm đúng cột "Tên", tuyệt đối né cột chứa chữ "Mã"
                         let idxKho = rowStr.findIndex(c => c.includes('tên kho') && !c.includes('mã'));
                         if(idxKho === -1) idxKho = rowStr.findIndex(c => c.includes('kho tổng') && !c.includes('mã'));
                         if(idxKho === -1) idxKho = rowStr.findIndex(c => c.includes('kho tổng') || c.includes('tên kho'));
@@ -1272,11 +1273,14 @@ function ltHandleUpload(e) {
                         if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành') && !c.includes('mã'));
                         if(idxNganh === -1) idxNganh = rowStr.findIndex(c => c.includes('ngành'));
 
-                        let idxHang = rowStr.findIndex(c => c === 'tên nhãn' || c === 'hãng');
+                        // FIX TẠI ĐÂY: Áp dụng quy tắc né cột Mã cho Hãng/Nhãn
+                        let idxHang = rowStr.findIndex(c => (c.includes('tên nhãn') || c.includes('tên hãng')) && !c.includes('mã'));
+                        if(idxHang === -1) idxHang = rowStr.findIndex(c => (c.includes('nhãn') || c.includes('hãng')) && !c.includes('mã'));
+                        if(idxHang === -1) idxHang = rowStr.findIndex(c => c.includes('nhãn') || c.includes('hãng'));
+                        
                         let idxTime = rowStr.findIndex(c => c === 'thời gian lưu trú' || c === 'thời gian lưu');
                         
                         if(idxWeek === -1) idxWeek = rowStr.findIndex(c => c.includes('tuần'));
-                        if(idxHang === -1) idxHang = rowStr.findIndex(c => c.includes('nhãn') || c.includes('hãng'));
                         if(idxTime === -1) idxTime = rowStr.findIndex(c => c.includes('thời gian') || c.includes('tuổi'));
 
                         if ([idxWeek, idxKho, idxNganh, idxHang, idxTime].filter(x => x !== -1).length >= 3) { 
